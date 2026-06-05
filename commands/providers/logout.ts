@@ -1,28 +1,28 @@
 
 import { Command } from 'commander';
-import { providerToApiMap } from './login';
-import { session } from '../../utils/share';
-const fs = require('node:fs');
-// Source - https://stackoverflow.com/a/17371288
-// Posted by Andbdrew, modified by community. See post 'Timeline' for change history
-// Retrieved 2026-06-04, License - CC BY-SA 4.0
-
+import fs from 'node:fs/promises';
+import { getSession } from '../../utils/share';
 
 
 export const logoutCommand = new Command("logout")
     .description('Lets user logout from the provider')
     .option('-p, --provider <providerName>', 'Name of the provider (gemini, claude etc)', '')
-    .action((options) => {
-        if(options.p === "google" || options.provider === "google"){
-                providerToApiMap.delete("google");
-                session.apiKey = "";
-                session.client = null;
-                session.model= null;
-                session.provider=null;
-                const content = JSON.stringify(session)
-                // fs.writeFile(`${process.cwd()}/database.txt `, content, err => {});
-                fs.writeFile(`${process.cwd()}/database.json `, content, err => {});
-                console.log(`api-key for provoder ${options.provider} is deletd successfully`)
+    .action(async (options) => {
+        if (options.p === "google" || options.provider === "google") {
+            const session = await getSession();
+            session.apiKey = null;
+            session.client = null;
+            session.model = null;
+            session.provider = null;
+
+            const content = JSON.stringify(session)
+
+            try {
+                await fs.writeFile(`${process.cwd()}/database.json`, content);
+            } catch (error) {
+                console.log("Problem in setting variable")
+            }
+            console.log(`api-key for provioder "${options.provider}" deleted successfully`)
         }
     })
 

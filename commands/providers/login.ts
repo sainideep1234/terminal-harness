@@ -1,12 +1,10 @@
 
 import { Command } from 'commander';
 import { GoogleGenAI } from "@google/genai";
-import { session } from '../../utils/share';
-const fs = require('node:fs');
+import fs from 'node:fs/promises';
+import { getSession } from '../../utils/share';
 
 
-
-export const providerToApiMap = new Map<string , string>();
 
 export const loginCommand = new Command("login")
     .description('Lets user login into the provider (use it as default)')
@@ -14,21 +12,26 @@ export const loginCommand = new Command("login")
     .option('-a, --api_key <apiKey>', 'Your api key', '')
     .action(async (options) => {
 
-        if(options.p = "google" ){
+        if (options.provoder === "google") {
 
-            if(options.a || options.api_key){
-                providerToApiMap.set("google" , options.a || options.api_key)
-                session.provider = options.p
-                session.apiKey = providerToApiMap.get("google")!;
+            if (options.api_key) {
+                const session = await getSession();
+                session.provider = options.provider;
+                session.apiKey = options.api_key;
+                session.client = new GoogleGenAI({ apiKey: options.api_key });
 
-                session.client = new GoogleGenAI({apiKey:session.apiKey});
                 const content = JSON.stringify(session)
-                fs.writeFile(`${process.cwd()}/database.json `, content, err => {});
 
-                console.log("api-key is set for provider -> " , options.provider)
-                console.log("api-key  for provider -> " , providerToApiMap.get("google"))
+                try {
+                    await fs.writeFile(`${process.cwd()}/database.json`, content);
+                } catch (error) {
+                    console.log("Problem in setting variables")
+                }
+
+                console.log("api-key is set for provider -> ", options.provider);
+                console.log("api-key  for provider -> " , options.api_key);
             }
-            
+
         }
-        
+
     })

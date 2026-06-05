@@ -14,3 +14,4 @@ export const zshCommands = {
       required: ['comand'],
     },
   };
+
