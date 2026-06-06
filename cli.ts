@@ -12,4 +12,3 @@ program
   .addCommand(providerCommand);
 
 program.parse();
-
