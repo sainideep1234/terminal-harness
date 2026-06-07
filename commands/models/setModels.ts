@@ -1,11 +1,32 @@
 import { Command } from 'commander';
-import { getSession } from '../../utils/share';
+import {
+  getCurrentSession,
+  PROVIDERS_MODELS,
+  updateProviderModel,
+  type PROVIDERS_TYPES,
+} from '../../utils/share';
 
 export const setModel = new Command('set')
   .option('-m , --model <model_name>', 'select model in current session', '')
   .action(async (options) => {
-    const session = await getSession();
-    if (session.provider === 'google') {
-      // TODO: check googel models present and set that
+    try {
+      const session = await getCurrentSession();
+
+      const model = PROVIDERS_MODELS[session.provider].find(
+        (model) => model === options.model,
+      );
+      if (!model) {
+        console.error(
+          `Model ${options.model} is not Found on ${session.provider}`,
+        );
+        process.exit(1);
+      }
+      updateProviderModel(session.provider, model);
+      console.log(
+        `Model ${options.model} set successfully on provider ${session.provider}`,
+      );
+    } catch (error) {
+      console.error(error);
+      process.exit(1);
     }
   });

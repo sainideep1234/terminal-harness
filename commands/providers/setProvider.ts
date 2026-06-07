@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { getSession } from '../../utils/share';
+import { getCurrentSession } from '../../utils/share';
 
 export const setProviderCommand = new Command('provider')
   .description('Lets user set the default provider')
@@ -10,7 +10,7 @@ export const setProviderCommand = new Command('provider')
   )
   .action(async (options) => {
     if (options.p === 'google' || options.provider === 'google') {
-      const session = await getSession();
+      const session = await getCurrentSession();
       session.provider = 'google';
 
       // TODO: add model to database.json file.

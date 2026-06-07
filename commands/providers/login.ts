@@ -1,7 +1,9 @@
 import { Command } from 'commander';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'node:fs/promises';
-import { getSession } from '../../utils/share';
+
+import { Session } from 'node:inspector';
+import { PROVIDERS_MODELS, PROVIDERS_TYPES, upsertProviderInSession } from '../../utils/share';
 
 export const loginCommand = new Command('login')
   .description('Lets user login into the provider (use it as default)')
@@ -12,23 +14,22 @@ export const loginCommand = new Command('login')
   )
   .option('-a, --api_key <apiKey>', 'Your api key', '')
   .action(async (options) => {
-    if (options.provoder === 'google') {
-      if (options.api_key) {
-        const session = await getSession();
-        session.provider = options.provider;
-        session.apiKey = options.api_key;
-        session.client = new GoogleGenAI({ apiKey: options.api_key });
+    const providerAvailabel = PROVIDERS_MODELS[(options.provider as PROVIDERS_TYPES)];
+    if(!providerAvailabel){
+      console.error(`"${options.provider}" provider is not supported currently`)
+    }
 
-        const content = JSON.stringify(session);
-
+    if (providerAvailabel && options.api_key ) {
         try {
-          await fs.writeFile(`${process.cwd()}/database.json`, content);
+          console.log("hiì");
+          
+          await upsertProviderInSession(options.provider, options.api_key);
         } catch (error) {
-          console.log('Problem in setting variables');
+          console.error(error);
+          process.exit(1);
         }
 
         console.log('api-key is set for provider -> ', options.provider);
         console.log('api-key  for provider -> ', options.api_key);
       }
-    }
   });
