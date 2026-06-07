@@ -2,14 +2,15 @@ import { GoogleGenAI } from '@google/genai';
 import fs from 'fs/promises';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
+import { PROVIDERS_MODELS } from './modelsAndProviders';
 
 const SESISON_FILE_PATH = `${process.cwd()}/database.json`;
 
-const PROVIDERS_MODELS = {
-  google: ['gemini-3.5-flash'],
-  openai: ['gpt-4.5'],
-  claude: ['claude-opus-4.6'],
-} as const;
+// const PROVIDERS_MODELS = {
+//   google: ['gemini-3.5-flash'],
+//   openai: ['gpt-4.5'],
+//   claude: ['claude-opus-4.6'],
+// } as const;
 
 type PROVIDERS_TYPES = keyof typeof PROVIDERS_MODELS;
 type MODELS_SUPPORTED_TYPE =
