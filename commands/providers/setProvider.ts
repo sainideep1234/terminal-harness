@@ -1,7 +1,11 @@
 import { Command } from 'commander';
-import { getCurrentSession } from '../../utils/share';
+import {
+  PROVIDERS_MODELS,
+  PROVIDERS_TYPES,
+  upsertProviderInSession,
+} from '../../utils/share';
 
-export const setProviderCommand = new Command('provider')
+export const setProviderCommand = new Command('set')
   .description('Lets user set the default provider')
   .option(
     '-p, --provider <providerName>',
@@ -9,10 +13,21 @@ export const setProviderCommand = new Command('provider')
     '',
   )
   .action(async (options) => {
-    if (options.p === 'google' || options.provider === 'google') {
-      const session = await getCurrentSession();
-      session.provider = 'google';
-
-      // TODO: add model to database.json file.
+    // check for valid provider
+    const availabelProviders =
+      PROVIDERS_MODELS[options.provider as PROVIDERS_TYPES];
+    if (!availabelProviders) {
+      console.error(
+        `"${options.provider}" provider is not supported currently`,
+      );
+    }
+    // mark active as true and update in parsedData
+    const active = true;
+    try {
+      await upsertProviderInSession(options.provider, { active });
+    } catch (error) {
+      
+      console.error(error.message);
+      process.exit(1);
     }
   });

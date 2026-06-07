@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import  { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import { zshCommands } from '../utils/tools';
 import { exec } from 'child_process';
 import { getCurrentSession } from '../utils/share';
@@ -11,16 +11,20 @@ export const agentCommand = new Command('agent')
     if (options.prompt) {
       let query = options.prompt;
       const session = await getCurrentSession();
-      
-      if (session.provider === 'google' && session.apiKey && session.client instanceof GoogleGenAI) {
+
+      if (
+        session.provider === 'google' &&
+        session.apiKey &&
+        session.client instanceof GoogleGenAI
+      ) {
         const response = await session.client!.models.generateContent({
-          model: session.model! ,
+          model: session.model!,
           contents: query,
           config: {
             tools: [{ functionDeclarations: [zshCommands] }],
           },
-        })
-       
+        });
+
         if (!response) {
           return;
         }
@@ -47,8 +51,16 @@ export const agentCommand = new Command('agent')
           });
         }
         query = '';
+      } else if (
+        session.provider === 'openai' &&
+        session.apiKey &&
+        session.client instanceof GoogleGenAI
+      ) {
+      } else if (
+        session.provider === 'claude' &&
+        session.apiKey &&
+        session.client instanceof GoogleGenAI
+      ) {
       }
-      else if(session.provider === 'openai' && session.apiKey && session.client instanceof GoogleGenAI){}
-      else if(session.provider === 'claude' && session.apiKey && session.client instanceof GoogleGenAI){}
     }
   });

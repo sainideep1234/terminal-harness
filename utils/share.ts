@@ -2,11 +2,8 @@ import { GoogleGenAI } from '@google/genai';
 import fs from 'fs/promises';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
-import { parseDateDef } from 'openai/_vendor/zod-to-json-schema/index.mjs';
 
 const SESISON_FILE_PATH = `${process.cwd()}/database.json`;
-console.log("[PATH]", SESISON_FILE_PATH);
-
 
 const PROVIDERS_MODELS = {
   google: ['gemini-3.5-flash'],
@@ -36,31 +33,70 @@ interface CurrentSessionProvider {
 }
 
 const currentSessionProvider: CurrentSessionProvider | null = null;
-
+interface upsertProviderInSessionInputType {
+  apiKey?: string;
+  active?: boolean;
+  model?: MODELS_SUPPORTED_TYPE;
+}
 async function upsertProviderInSession(
   provider: PROVIDERS_TYPES,
-  apiKey: string,
+  options: upsertProviderInSessionInputType,
 ) {
-  const model = PROVIDERS_MODELS[provider][0];
+  if (!options.model) {
+    options.model = PROVIDERS_MODELS[provider][0];
+  }
 
-  console.log("hiiiiiiii");
   try {
-    console.log("hiiiiiiii");
-    
     const data = await fs.readFile(SESISON_FILE_PATH, 'utf-8');
     const parsedData = JSON.parse(data) as AllSessiondetailsType;
-    if(parsedData[provider]){
-      parsedData[provider].apiKey = apiKey;
-    }
+    if (parsedData[provider]) {
+      console.log('jsi haoasjla');
 
-    parsedData[provider] = { apiKey, model, active: false };
+      if (options.apiKey) {
+        parsedData[provider].apiKey = options.apiKey;
+      }
+      if (options.model) {
+        parsedData[provider].model = options.model;
+      }
+      if (options.active) {
+        Object.entries(parsedData).forEach(([currProvider, providerInfo]) => {
+          if (currProvider !== provider && providerInfo.active === true) {
+            providerInfo.active = true;
+          } else if (
+            currProvider === provider &&
+            providerInfo.active === true
+          ) {
+            providerInfo.active = options.active!;
+          }
+        });
+        parsedData[provider].active = options.active;
+      }
+    } else {
+      if (options.apiKey) {
+        console.log('jasi hso ');
+
+        parsedData[provider] = {
+          apiKey: options.apiKey,
+          model: options.model,
+          active: false,
+        };
+      } else {
+        throw Error('Appropriate provider is not availabel');
+      }
+    }
 
     writeAllSessionDeatilInFile(parsedData);
   } catch (error) {
-    console.log("hellloooooooo");
-
-    allSessiondetails[provider] = {active:true , apiKey  , model}
-    writeAllSessionDeatilInFile(allSessiondetails)
+    if (options.apiKey) {
+      allSessiondetails[provider] = {
+        active: true,
+        apiKey: options.apiKey,
+        model: options.model,
+      };
+      writeAllSessionDeatilInFile(allSessiondetails);
+    }else{
+      throw error
+    }
   }
 }
 
@@ -119,18 +155,25 @@ async function getCurrentSession(): Promise<CurrentSessionProvider> {
 
   const data = await fs.readFile(SESISON_FILE_PATH, 'utf-8');
   const parsedData = JSON.parse(data) as AllSessiondetailsType;
-  if(!parsedData){
-    throw Error("no Session is present")
+  if (!parsedData) {
+    throw Error('no Session is present');
   }
 
-  const currentProvider = (Object.keys(parsedData) as PROVIDERS_TYPES[]).find((provider) => {
-    return parsedData[provider]!.active === true;
+  let currentProvider: PROVIDERS_TYPES | null = null;
+
+  (Object.keys(parsedData) as PROVIDERS_TYPES[]).forEach((provider) => {
+    if (parsedData[provider]?.active === true) {
+      currentProvider = provider;
+    }
   });
 
   if (!currentProvider) {
     throw Error('No actiive provider');
   }
-  const { apiKey, model } = allSessiondetails[currentProvider]!;
+  if (!parsedData[currentProvider]) {
+    throw Error('This provider is not exists');
+  }
+  const { apiKey, model } = parsedData[currentProvider];
 
   if (!apiKey) {
     throw Error('No api key availabel');
@@ -154,5 +197,4 @@ export {
   getAllSessions,
   updateProviderModel,
   upsertProviderInSession,
-  
 };
