@@ -1,7 +1,5 @@
 import { Command } from 'commander';
 import { GoogleGenAI } from '@google/genai';
-import { zshCommands } from '../utils/tools';
-import { exec } from 'child_process';
 import { getCurrentSession } from '../utils/share';
 
 export const agentCommand = new Command('agent')
@@ -10,7 +8,14 @@ export const agentCommand = new Command('agent')
   .action(async (options) => {
     if (options.prompt) {
       let query = options.prompt;
-      const session = await getCurrentSession();
+
+      let session;
+      try {
+        session = await getCurrentSession();
+      } catch (error) {
+        console.error(error.message);
+        process.exit(1);
+      }
 
       if (
         session.provider === 'google' &&
@@ -21,7 +26,7 @@ export const agentCommand = new Command('agent')
           model: session.model!,
           contents: query,
           config: {
-            tools: [{ functionDeclarations: [zshCommands] }],
+            tools: [{ functionDeclarations: [] }],
           },
         });
 
@@ -38,17 +43,7 @@ export const agentCommand = new Command('agent')
           if (!args) {
             return;
           }
-          exec(args.comand as string, (error, stdout, stderr) => {
-            if (error) {
-              console.error(`Error executing command: ${error.message}`);
-              return;
-            }
-            if (stderr) {
-              console.error(`Standard Error: ${stderr}`);
-              return;
-            }
-            console.log(`Output:\n${stdout}`);
-          });
+      
         }
         query = '';
       } else if (

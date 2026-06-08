@@ -6,8 +6,6 @@ import { PROVIDERS_MODELS } from './modelsAndProviders';
 
 const SESISON_FILE_PATH = `${process.cwd()}/database.json`;
 
-
-
 type PROVIDERS_TYPES = keyof typeof PROVIDERS_MODELS;
 type MODELS_SUPPORTED_TYPE =
   (typeof PROVIDERS_MODELS)[keyof typeof PROVIDERS_MODELS][number];
@@ -47,7 +45,6 @@ async function upsertProviderInSession(
     const data = await fs.readFile(SESISON_FILE_PATH, 'utf-8');
     const parsedData = JSON.parse(data) as AllSessiondetailsType;
     if (parsedData[provider]) {
-
       if (options.apiKey) {
         parsedData[provider].apiKey = options.apiKey;
       }
@@ -90,8 +87,8 @@ async function upsertProviderInSession(
         model: options.model,
       };
       writeAllSessionDeatilInFile(allSessiondetails);
-    }else{
-      throw error
+    } else {
+      throw error;
     }
   }
 }
@@ -164,7 +161,7 @@ async function getCurrentSession(): Promise<CurrentSessionProvider> {
   });
 
   if (!currentProvider) {
-    throw Error('No actiive provider');
+    throw Error('No actiive provider  please set a provider');
   }
   if (!parsedData[currentProvider]) {
     throw Error('This provider is not exists');
@@ -193,5 +190,5 @@ export {
   getAllSessions,
   updateProviderModel,
   upsertProviderInSession,
-  writeAllSessionDeatilInFile
+  writeAllSessionDeatilInFile,
 };

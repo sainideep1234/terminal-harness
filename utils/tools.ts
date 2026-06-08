@@ -1,11 +1,21 @@
 import { Type } from '@google/genai';
-import { DESTRUCTION } from 'dns';
-import { parseArgs } from 'util';
 
-export const zshCommands = {
+interface JsonSchema {
+  type: string;
+  properties: Record<string, { type: string; description: string }>;
+  required?: string[];
+}
+
+export interface Ttool<Tparameter extends JsonSchema = JsonSchema> {
+  name: string;
+  descripiton: string;
+  options: Tparameter;
+}
+
+const zshCommands: Ttool = {
   name: 'zsh',
-  description: `zsh --version zsh 5.9 (arm64-apple-darwin25.0)`,
-  parameters: {
+  descripiton: `zsh --version zsh 5.9 (arm64-apple-darwin25.0)`,
+  options: {
     type: Type.OBJECT,
     properties: {
       comand: {
@@ -17,17 +27,38 @@ export const zshCommands = {
   },
 };
 
-export const writeToFile = {
-  nmae: 'write_to_file',
-  description: 'use to create and write in file',
-  parameters: {
-    type: Type.OBJECT,
+const WriteToFile: Ttool = {
+  name: 'file_write',
+  descripiton: 'tool to  write code in file',
+  options: {
+    type: 'string',
     properties: {
-      code: {
-        type: Type.STRING,
-        description: 'code to write in a file',
+      fileName: {
+        type: 'string',
+        description: 'file address where need to add the code',
+      },
+      content: {
+        type: 'string ',
+        description: 'code to add in a particular file location ',
       },
     },
-    required: ['code'],
+    required: ['fileName', 'content'],
   },
 };
+
+const ReadToFile: Ttool = {
+  name: 'read_write',
+  descripiton: 'tool to read file content',
+  options: {
+    type: 'string',
+    properties: {
+      fileName: {
+        type: 'string',
+        description: 'file address where need to add the code',
+      },
+    },
+    required: ['fileName'],
+  },
+};
+
+export const ALL_TOOLS: Ttool[] = [zshCommands, WriteToFile, ReadToFile];
