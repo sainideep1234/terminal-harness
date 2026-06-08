@@ -26,8 +26,7 @@ export const setProviderCommand = new Command('set')
     try {
       await upsertProviderInSession(options.provider, { active });
     } catch (error) {
-      
-      console.error(error.message);
+      console.error(error.message );
       process.exit(1);
     }
   });

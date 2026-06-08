@@ -6,11 +6,7 @@ import { PROVIDERS_MODELS } from './modelsAndProviders';
 
 const SESISON_FILE_PATH = `${process.cwd()}/database.json`;
 
-// const PROVIDERS_MODELS = {
-//   google: ['gemini-3.5-flash'],
-//   openai: ['gpt-4.5'],
-//   claude: ['claude-opus-4.6'],
-// } as const;
+
 
 type PROVIDERS_TYPES = keyof typeof PROVIDERS_MODELS;
 type MODELS_SUPPORTED_TYPE =
@@ -51,7 +47,6 @@ async function upsertProviderInSession(
     const data = await fs.readFile(SESISON_FILE_PATH, 'utf-8');
     const parsedData = JSON.parse(data) as AllSessiondetailsType;
     if (parsedData[provider]) {
-      console.log('jsi haoasjla');
 
       if (options.apiKey) {
         parsedData[provider].apiKey = options.apiKey;
@@ -198,4 +193,5 @@ export {
   getAllSessions,
   updateProviderModel,
   upsertProviderInSession,
+  writeAllSessionDeatilInFile
 };

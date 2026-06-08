@@ -1,5 +1,12 @@
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
+import {
+  getAllSessions,
+  getCurrentSession,
+  PROVIDERS_TYPES,
+  writeAllSessionDeatilInFile,
+} from '../../utils/share';
+import { writeToFile } from '../../utils/tools';
 
 export const logoutCommand = new Command('logout')
   .description('Lets user logout from the provider')
@@ -9,17 +16,24 @@ export const logoutCommand = new Command('logout')
     '',
   )
   .action(async (options) => {
-    if (options.p === 'google' || options.provider === 'google') {
-      
-      // TODO: update it delete session of a particular provider
-      const session = {
-        apiKey:null, 
-        model : null , 
-        provider:null
-      }
-     
-
-      console.log("Session logout successfully");
-      
+    const data = await getAllSessions();
+    if (!data) {
+      console.error('No session TO logout');
+      process.exit(1);
     }
+    // TODO: update it delete session of a particular provider
+
+    const providerToDelete = (Object.keys(data) as PROVIDERS_TYPES[]).find(
+      (provider) => {
+        return provider === options.provider;
+      },
+    );
+    if (!providerToDelete) {
+      console.error('No session TO logout');
+      process.exit(1);
+    }
+
+    delete data[providerToDelete];
+    writeAllSessionDeatilInFile(data);
+    console.log('Session logout successfully');
   });
