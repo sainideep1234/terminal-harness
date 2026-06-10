@@ -12,7 +12,6 @@ export const getModelsCommand = new Command('ls')
           console.log(model);
         });
       });
-      
     } catch (error) {
       console.error(error);
       process.exit(1);

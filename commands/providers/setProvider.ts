@@ -26,12 +26,11 @@ export const setProviderCommand = new Command('set')
     try {
       await upsertProviderInSession(options.provider, { active });
     } catch (error) {
-      if(error instanceof Error){
-        console.error(error.message );
-      }else{
-        console.error(String(error))
+      if (error instanceof Error) {
+        console.error(error.message);
+      } else {
+        console.error(String(error));
       }
-        process.exit(1);
-
+      process.exit(1);
     }
   });

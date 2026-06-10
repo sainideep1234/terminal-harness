@@ -1,6 +1,10 @@
 import { Command } from 'commander';
-import { GoogleGenAI, type FunctionDeclaration } from '@google/genai';
-import { getCurrentSession } from '../utils/share';
+import {
+  GoogleGenAI,
+  type FunctionDeclaration,
+  type Part,
+} from '@google/genai';
+import { getCurrentSession, PROVIDERS_TYPES } from '../utils/share';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import readline from 'readline';
@@ -19,6 +23,7 @@ import {
   type Hooks,
   type HookContext,
 } from '../utils/lifecycleHooks';
+import { intializeSubAgents } from '../utils/sunagents';
 
 async function askPermission(
   toolName: string,
@@ -53,7 +58,7 @@ async function askPermission(
 }
 
 // Tool dispatcher — hooks fire around every execution
-async function dispatchTool(
+export async function dispatchTool(
   name: string,
   args: Record<string, unknown>,
   hooks: Hooks,
@@ -80,6 +85,14 @@ async function dispatchTool(
     );
   } else if (name === 'read_write') {
     result = await readFileTool(args.fileName as string);
+  } else if (name === 'create_a_subagent') {
+    const session = await getCurrentSession();
+    result = await intializeSubAgents(
+      args.provider as PROVIDERS_TYPES,
+      args.query as string,
+      args.systemPrompt as string,
+      hooks,
+    );
   } else {
     result = { success: false, errorMessage: `Unknown tool: ${name}` };
   }
@@ -91,14 +104,17 @@ async function dispatchTool(
   return JSON.stringify(result);
 }
 
-//  Hook setup 
+//  Hook setup
 function buildHooks(): Hooks {
   const hooks = createHooks();
 
   // Pre-hook: ask user permission before any zsh command
   addPreHook(hooks, async ({ tool }) => {
     if (tool.name === 'zsh') {
-      const allowed = await askPermission(tool.name, tool.args);
+      let allowed = true;
+      if ((tool.args.comand as string).includes('rm -rf')) {
+        allowed = await askPermission(tool.name, tool.args);
+      }
       return allowed ? 'allow' : 'deny';
     }
     return 'allow';
@@ -114,13 +130,13 @@ function buildHooks(): Hooks {
   return hooks;
 }
 
-// System prompt 
+// System prompt
 const SYSTEM_PROMPT = `
 You are a powerful coding agent with access to the following tools:
 
-  • zsh          – Run any shell command (zsh) on the user's machine.
-  • file_write   – Write (or overwrite) any file at an absolute path.
-  • read_write   – Read the full contents of any file at an absolute path.
+  • zsh        :-  Run any shell command (zsh) on the user's machine.
+  • file_write :-  Write (or overwrite) any file at an absolute path.
+  • read_write :-  Read the full contents of any file at an absolute path.
 
 Capabilities you can exercise:
   - Navigate the file system (ls, find, cat via zsh)
@@ -135,7 +151,7 @@ Guidelines:
   - Respond concisely; show relevant code or output, not raw JSON.
 `.trim();
 
-// Agent command 
+// Agent command
 export const agentCommand = new Command('agent')
   .description('Runs the agent')
   .option('-p, --prompt <prompt>', 'prompt', '')
@@ -145,13 +161,13 @@ export const agentCommand = new Command('agent')
     const query: string = options.prompt;
     const hooks = buildHooks();
 
-    // Pretty-print the parsed prompt 
+    // Pretty-print the parsed prompt
     console.log(
       `\n${'─'.repeat(60)}\n` +
-      `  🤖  Agent Prompt\n` +
-      `${'─'.repeat(60)}\n` +
-      `  ${query}\n` +
-      `${'─'.repeat(60)}\n`,
+        `  🤖  Agent Prompt\n` +
+        `${'─'.repeat(60)}\n` +
+        `  ${query}\n` +
+        `${'─'.repeat(60)}\n`,
     );
 
     let session;
@@ -166,7 +182,7 @@ export const agentCommand = new Command('agent')
       process.exit(1);
     }
 
-    // Google (Gemini) 
+    // Google (Gemini)
     if (
       session.provider === 'google' &&
       session.apiKey &&
@@ -184,7 +200,7 @@ export const agentCommand = new Command('agent')
       let response = await chat.sendMessage({ message: query });
 
       while (response.functionCalls && response.functionCalls.length > 0) {
-        const toolResults = [];
+        const toolResults: Part[] = [];
         for (const fc of response.functionCalls) {
           const result = await dispatchTool(
             fc.name!,
@@ -200,7 +216,7 @@ export const agentCommand = new Command('agent')
 
       console.log(response.text);
 
-      //  OpenAI 
+      //  OpenAI
     } else if (
       session.provider === 'openai' &&
       session.apiKey &&
@@ -251,7 +267,6 @@ export const agentCommand = new Command('agent')
       }
 
       console.log(response.choices[0].message.content);
-
     } else if (
       session.provider === 'claude' &&
       session.apiKey &&

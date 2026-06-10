@@ -65,4 +65,33 @@ const ReadToFile: Ttool = {
   },
 };
 
-export const ALL_TOOLS: Ttool[] = [zshCommands, WriteToFile, ReadToFile];
+const createSubAgent: Ttool = {
+  name: 'create_a_subagent',
+  descripiton: 'create a subagent that do work',
+  options: {
+    type: 'object',
+    properties: {
+      provider: {
+        type: 'string',
+        description: 'provider which subagents need to build',
+      },
+      systemPrompt: {
+        type: 'string',
+        description:
+          'add specific  system prompt acording to task assigned in comprehensive manner ',
+      },
+      query: {
+        type: 'string',
+        description: 'agents needs to do',
+      },
+    },
+    required: ['systemPrompt', 'toolsList'],
+  },
+};
+
+export const ALL_TOOLS: Ttool[] = [
+  zshCommands,
+  WriteToFile,
+  ReadToFile,
+  createSubAgent,
+];
