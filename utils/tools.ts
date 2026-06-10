@@ -1,5 +1,3 @@
-import { Type } from '@google/genai';
-
 interface JsonSchema {
   type: string;
   properties: Record<string, { type: string; description: string }>;
@@ -12,15 +10,21 @@ export interface Ttool<Tparameter extends JsonSchema = JsonSchema> {
   options: Tparameter;
 }
 
+// The runtime shape of a tool call from the AI
+export type ToolCall = {
+  name: string;
+  args: Record<string, unknown>;
+};
+
 const zshCommands: Ttool = {
   name: 'zsh',
-  descripiton: `zsh --version zsh 5.9 (arm64-apple-darwin25.0)`,
+  descripiton: 'Run a shell command on zsh',
   options: {
-    type: Type.OBJECT,
+    type: 'object',
     properties: {
       comand: {
-        type: Type.STRING,
-        description: 'comand to run on zsh',
+        type: 'string',
+        description: 'command to run on zsh',
       },
     },
     required: ['comand'],
@@ -29,17 +33,17 @@ const zshCommands: Ttool = {
 
 const WriteToFile: Ttool = {
   name: 'file_write',
-  descripiton: 'tool to  write code in file',
+  descripiton: 'Write content to a file at a given path',
   options: {
-    type: 'string',
+    type: 'object',
     properties: {
       fileName: {
         type: 'string',
-        description: 'file address where need to add the code',
+        description: 'absolute file path where content should be written',
       },
       content: {
-        type: 'string ',
-        description: 'code to add in a particular file location ',
+        type: 'string',
+        description: 'content to write into the file',
       },
     },
     required: ['fileName', 'content'],
@@ -48,13 +52,13 @@ const WriteToFile: Ttool = {
 
 const ReadToFile: Ttool = {
   name: 'read_write',
-  descripiton: 'tool to read file content',
+  descripiton: 'Read the content of a file at a given path',
   options: {
-    type: 'string',
+    type: 'object',
     properties: {
       fileName: {
         type: 'string',
-        description: 'file address where need to add the code',
+        description: 'absolute file path to read from',
       },
     },
     required: ['fileName'],

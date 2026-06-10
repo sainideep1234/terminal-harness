@@ -37,9 +37,7 @@ async function upsertProviderInSession(
   provider: PROVIDERS_TYPES,
   options: upsertProviderInSessionInputType,
 ) {
-  if (!options.model) {
-    options.model = PROVIDERS_MODELS[provider][0];
-  }
+  const model = options.model ?? PROVIDERS_MODELS[provider][0];
 
   try {
     const data = await fs.readFile(SESISON_FILE_PATH, 'utf-8');
@@ -48,13 +46,13 @@ async function upsertProviderInSession(
       if (options.apiKey) {
         parsedData[provider].apiKey = options.apiKey;
       }
-      if (options.model) {
-        parsedData[provider].model = options.model;
+      if (model) {
+        parsedData[provider].model = model;
       }
       if (options.active) {
         Object.entries(parsedData).forEach(([currProvider, providerInfo]) => {
           if (currProvider !== provider && providerInfo.active === true) {
-            providerInfo.active = true;
+            providerInfo.active = false;
           } else if (
             currProvider === provider &&
             providerInfo.active === true
@@ -66,11 +64,9 @@ async function upsertProviderInSession(
       }
     } else {
       if (options.apiKey) {
-        console.log('jasi hso ');
-
         parsedData[provider] = {
           apiKey: options.apiKey,
-          model: options.model,
+          model: model,
           active: false,
         };
       } else {
@@ -78,15 +74,15 @@ async function upsertProviderInSession(
       }
     }
 
-    writeAllSessionDeatilInFile(parsedData);
+    await writeAllSessionDeatilInFile(parsedData);
   } catch (error) {
     if (options.apiKey) {
       allSessiondetails[provider] = {
         active: true,
         apiKey: options.apiKey,
-        model: options.model,
+        model: model,
       };
-      writeAllSessionDeatilInFile(allSessiondetails);
+      await writeAllSessionDeatilInFile(allSessiondetails);
     } else {
       throw error;
     }
@@ -101,7 +97,7 @@ async function createClient(
   if (apiKey && provider === 'google') {
     client = new GoogleGenAI({ apiKey });
   } else if (apiKey && provider === 'openai') {
-    client = new OpenAI();
+    client = new OpenAI({ apiKey });
   } else if (apiKey && provider === 'claude') {
     client = new Anthropic({
       apiKey,

@@ -3,7 +3,6 @@ import {
   getCurrentSession,
   PROVIDERS_MODELS,
   updateProviderModel,
-  upsertProviderInSession,
   type PROVIDERS_TYPES,
 } from '../../utils/share';
 
@@ -22,7 +21,7 @@ export const setModel = new Command('set')
         );
         process.exit(1);
       }
-      upsertProviderInSession(session.provider, {model});
+      await updateProviderModel(session.provider, model);
       console.log(
         `Model ${options.model} set successfully on provider ${session.provider}`,
       );

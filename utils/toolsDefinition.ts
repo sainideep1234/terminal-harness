@@ -1,28 +1,23 @@
-import { file } from 'bun';
 import { exec } from 'child_process';
+import { promisify } from 'util';
 import fs from 'fs/promises';
-import { parse } from 'path';
-import { json } from 'stream/consumers';
+
+const execAsync = promisify(exec);
 
 type toolReturnType =
   | { success: true; data: unknown }
   | { success: false; errorMessage: string };
 
-
-export function bashTool(comand: string): toolReturnType {
-  const isExecuted = exec(comand, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error executing command: ${error.message}`);
-      return;
+export async function bashTool(command: string): Promise<toolReturnType> {
+  try {
+    const { stdout, stderr } = await execAsync(command);
+    return { success: true, data: stdout || stderr };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { success: false, errorMessage: error.message };
     }
-    if (stderr) {
-      console.error(`Standard Error: ${stderr}`);
-      return;
-    }
-    console.log(`Output:\n${stdout}`);
-  });
-  if (isExecuted) return { success: true, data: isExecuted };
-  return { success: false, errorMessage: 'comand couldn;t able to execute' };
+    return { success: false, errorMessage: String(error) };
+  }
 }
 
 export async function writeFileTool(
@@ -30,19 +25,18 @@ export async function writeFileTool(
   content: string,
 ): Promise<toolReturnType> {
   try {
-    const stringifyContent = JSON.stringify(content);
-    await fs.writeFile(filePath, stringifyContent);
-    return { success: true, data: 'content wirte to file succefully' };
+    await fs.writeFile(filePath, content);
+    return { success: true, data: 'content written to file successfully' };
   } catch (error) {
-    return { success: false, errorMessage: "can't able to write data" };
+    return { success: false, errorMessage: "can't write data" };
   }
 }
+
 export async function readFileTool(filePath: string): Promise<toolReturnType> {
   try {
     const data = await fs.readFile(filePath, 'utf-8');
-    const parsedData = JSON.parse(data);
-    return { success: true, data: parsedData };
+    return { success: true, data };
   } catch (error) {
-    return { success: false, errorMessage: "can't able to read data" };
+    return { success: false, errorMessage: "can't read data" };
   }
 }

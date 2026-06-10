@@ -1,8 +1,4 @@
 import { Command } from 'commander';
-import { GoogleGenAI } from '@google/genai';
-import fs from 'node:fs/promises';
-
-import { Session } from 'node:inspector';
 import { PROVIDERS_MODELS, PROVIDERS_TYPES, upsertProviderInSession } from '../../utils/share';
 
 export const loginCommand = new Command('login')
@@ -21,9 +17,8 @@ export const loginCommand = new Command('login')
 
     if (providerAvailabel && options.api_key ) {
         try {
-          console.log("hiì");
           
-          await upsertProviderInSession(options.provider, options.api_key);
+          await upsertProviderInSession(options.provider, { apiKey: options.api_key, active: true });
         } catch (error) {
           console.error(error);
           process.exit(1);

@@ -1,9 +1,5 @@
 import { Command } from 'commander';
-import {
-  getCurrentSession,
-  PROVIDERS_MODELS,
-  upsertProviderInSession,
-} from '../../utils/share';
+import { PROVIDERS_MODELS } from '../../utils/share';
 
 export const getModelsCommand = new Command('ls')
   .description('Returns all the supported models')

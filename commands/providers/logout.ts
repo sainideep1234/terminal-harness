@@ -1,12 +1,9 @@
 import { Command } from 'commander';
-import fs from 'node:fs/promises';
 import {
   getAllSessions,
-  getCurrentSession,
   PROVIDERS_TYPES,
   writeAllSessionDeatilInFile,
 } from '../../utils/share';
-import { writeToFile } from '../../utils/tools';
 
 export const logoutCommand = new Command('logout')
   .description('Lets user logout from the provider')
@@ -34,6 +31,6 @@ export const logoutCommand = new Command('logout')
     }
 
     delete data[providerToDelete];
-    writeAllSessionDeatilInFile(data);
+    await writeAllSessionDeatilInFile(data);
     console.log('Session logout successfully');
   });
