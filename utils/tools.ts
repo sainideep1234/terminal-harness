@@ -1,6 +1,6 @@
 interface JsonSchema {
   type: string;
-  properties: Record<string, { type: string; description: string }>;
+  properties: unknown;
   required?: string[];
 }
 
@@ -85,13 +85,14 @@ const createSubAgent: Ttool = {
         description: 'agents needs to do',
       },
     },
-    required: ['systemPrompt' , 'provider' ,'query' ],
+    required: ['systemPrompt', 'provider', 'query'],
   },
 };
 
 const grepSearch: Ttool = {
   name: 'grep_search',
-  descripiton: 'Search for a text pattern inside files in a directory (like grep -rn). Returns matching file paths and line numbers.',
+  descripiton:
+    'Search for a text pattern inside files in a directory (like grep -rn). Returns matching file paths and line numbers.',
   options: {
     type: 'object',
     properties: {
@@ -105,7 +106,8 @@ const grepSearch: Ttool = {
       },
       fileGlob: {
         type: 'string',
-        description: 'Optional file glob filter (e.g., "*.ts", "*.js"). Leave empty to search all files.',
+        description:
+          'Optional file glob filter (e.g., "*.ts", "*.js"). Leave empty to search all files.',
       },
     },
     required: ['pattern', 'directory'],
@@ -114,7 +116,8 @@ const grepSearch: Ttool = {
 
 const findFiles: Ttool = {
   name: 'find_files',
-  descripiton: 'Find files by name pattern inside a directory. Excludes node_modules and .git automatically.',
+  descripiton:
+    'Find files by name pattern inside a directory. Excludes node_modules and .git automatically.',
   options: {
     type: 'object',
     properties: {
@@ -124,7 +127,8 @@ const findFiles: Ttool = {
       },
       namePattern: {
         type: 'string',
-        description: 'The file name pattern to match (e.g., "*.ts", "package.json")',
+        description:
+          'The file name pattern to match (e.g., "*.ts", "package.json")',
       },
     },
     required: ['directory', 'namePattern'],
@@ -133,20 +137,62 @@ const findFiles: Ttool = {
 
 const git: Ttool = {
   name: 'git',
-  descripiton: 'Run a git command in a repository. Supports status, diff, log, add, commit, branch, checkout, etc.',
+  descripiton:
+    'Run a git command in a repository. Supports status, diff, log, add, commit, branch, checkout, etc.',
   options: {
     type: 'object',
     properties: {
       gitCommand: {
         type: 'string',
-        description: 'The git subcommand and arguments (e.g., "status", "diff HEAD", "add .", "commit -m \\"fix bug\\"")',
+        description:
+          'The git subcommand and arguments (e.g., "status", "diff HEAD", "add .", "commit -m \\"fix bug\\"")',
       },
       repoPath: {
         type: 'string',
-        description: 'The absolute path of the git repository to run the command in',
+        description:
+          'The absolute path of the git repository to run the command in',
       },
     },
     required: ['gitCommand', 'repoPath'],
+  },
+};
+
+const planMaker: Ttool = {
+  name: 'plan_maker',
+  descripiton:
+    'Create an execution plan as an ordered list of tool steps with dependencies. Call this FIRST before any other tool.',
+  options: {
+    type: 'object',
+    properties: {
+      steps: {
+        type: 'array',
+        description: 'Ordered list of tool steps to execute',
+        items: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'Unique step ID (e.g. "s1", "s2")',
+            },
+            toolName: {
+              type: 'string',
+              description: 'Name of the tool to call (e.g. zsh, read_file)',
+            },
+            args: {
+              type: 'object',
+              description: 'Arguments to pass to the tool',
+            },
+            dependsOn: {
+              type: 'array',
+              description: 'Step IDs that must complete before this step runs',
+              items: { type: 'string' },
+            },
+          },
+          required: ['id', 'toolName', 'args', 'dependsOn'],
+        },
+      },
+    },
+    required: ['steps'],
   },
 };
 
@@ -158,5 +204,5 @@ export const ALL_TOOLS: Ttool[] = [
   grepSearch,
   findFiles,
   git,
+  planMaker,
 ];
-

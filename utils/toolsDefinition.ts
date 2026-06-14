@@ -79,7 +79,8 @@ export async function findFilesTool(
     );
     return {
       success: true,
-      data: stdout || `No files matching "${namePattern}" found in ${directory}`,
+      data:
+        stdout || `No files matching "${namePattern}" found in ${directory}`,
     };
   } catch (error: any) {
     return {
@@ -95,9 +96,12 @@ export async function gitTool(
   repoPath: string,
 ): Promise<toolReturnType> {
   try {
-    const { stdout, stderr } = await execAsync(`git -C "${repoPath}" ${gitCommand}`, {
-      timeout: 15000,
-    });
+    const { stdout, stderr } = await execAsync(
+      `git -C "${repoPath}" ${gitCommand}`,
+      {
+        timeout: 15000,
+      },
+    );
     const output = (stdout || '') + (stderr ? `\n[stderr]: ${stderr}` : '');
     return { success: true, data: output || '(no output)' };
   } catch (error: any) {
@@ -106,5 +110,12 @@ export async function gitTool(
       errorMessage: error?.message ?? 'git command failed',
     };
   }
+}
+
+export interface WorkFlowStep {
+  id: string;
+  dependsOn: string[];
+  toolName: string;
+  args: Record<string, unknown>;
 }
 

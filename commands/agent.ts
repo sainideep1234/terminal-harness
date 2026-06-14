@@ -16,6 +16,7 @@ import {
   grepSearchTool,
   findFilesTool,
   gitTool,
+  WorkFlowStep,
 } from '../utils/toolsDefinition';
 import {
   createHooks,
@@ -27,7 +28,12 @@ import {
   type HookContext,
 } from '../utils/lifecycleHooks';
 import { intializeSubAgents } from '../utils/sunagents';
-
+type QueueItem = {
+  toolId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  status: 'pending' | 'completed';
+};
 async function askPermission(
   toolName: string,
   args: Record<string, unknown>,
@@ -59,9 +65,6 @@ async function askPermission(
     });
   });
 }
-
-
-
 
 // Tool dispatcher — hooks fire around every execution
 export async function dispatchTool(
@@ -111,6 +114,8 @@ export async function dispatchTool(
       args.systemPrompt as string,
       hooks,
     );
+  } else if (name === 'plan_maker') {
+    result = await toolSchedular(hooks, args.steps as WorkFlowStep[]);
   } else {
     result = { success: false, errorMessage: `Unknown tool: ${name}` };
   }
@@ -122,11 +127,72 @@ export async function dispatchTool(
   return JSON.stringify(result);
 }
 
+async function toolSchedular(
+  hooks: Hooks,
+  workFlowSteps: WorkFlowStep[],
+): Promise<Part[]> {
+  const toolResults: Part[] = [];
+  let waitingQueue: QueueItem[] = [];
+  const readyQueue: QueueItem[] = [];
+  const completedSet = new Set<string>();
+
+  // Bug 1 fix: populate queues ONCE before the while loop — not inside it
+  for (const step of workFlowSteps) {
+    const item: QueueItem = {
+      toolId: step.id,
+      toolName: step.toolName,
+      args: step.args,
+      status: 'pending',
+    };
+    if (step.dependsOn.length === 0) {
+      readyQueue.push(item);   // no deps → ready immediately
+    } else {
+      waitingQueue.push(item); // has deps → blocked
+    }
+  }
+
+  // Bug 5 fix: runWorker defined ONCE, outside the while loop
+  async function runWorker(): Promise<void> {
+    const tool = readyQueue.shift();
+    if (!tool) return;
+
+    const result = await dispatchTool(tool.toolName, tool.args, hooks);
+
+    // Bug 3 fix: add toolId string to completedSet, not the whole object
+    completedSet.add(tool.toolId);
+
+    toolResults.push({
+      functionResponse: { name: tool.toolName, response: { result } },
+    });
+
+    // Bug 4 fix: check waitingQueue — move unblocked tasks to readyQueue
+    const nowReady = waitingQueue.filter((waiting) => {
+      const step = workFlowSteps.find((s) => s.id === waiting.toolId);
+      return step?.dependsOn.every((depId) => completedSet.has(depId)) ?? false;
+    });
+
+    for (const task of nowReady) {
+      waitingQueue = waitingQueue.filter((q) => q.toolId !== task.toolId);
+      readyQueue.push(task); // now unblocked — workers will pick it up
+    }
+
+    return runWorker(); // this worker grabs the next ready task
+  }
+
+  // Bug 2 fix: while loop now works because readyQueue is populated before entering
+  while (readyQueue.length > 0 || waitingQueue.length > 0) {
+    const poolSize = Math.min(readyQueue.length, 5);
+    if (poolSize === 0) break; // safety: circular dependency guard
+    await Promise.all(Array.from({ length: poolSize }, () => runWorker()));
+  }
+
+  return toolResults;
+}
 //  Hook setup
 function buildHooks(): Hooks {
   const hooks = createHooks();
 
-  // Pre-hook: ask user permission before any zsh command 
+  // Pre-hook: ask user permission before any zsh command
   addPreHook(hooks, async ({ tool }) => {
     if (tool.name === 'zsh') {
       let allowed = true;
@@ -143,7 +209,8 @@ function buildHooks(): Hooks {
     const res = result as { success?: boolean; errorMessage?: string };
     const ok = res?.success !== false;
     const icon = ok ? '✅' : '❌';
-    const errSuffix = !ok && res?.errorMessage ? ` - Error: ${res.errorMessage}` : '';
+    const errSuffix =
+      !ok && res?.errorMessage ? ` - Error: ${res.errorMessage}` : '';
 
     let details = '';
     if (tool.name === 'zsh') {
@@ -162,7 +229,7 @@ function buildHooks(): Hooks {
       details = ` [query: "${tool.args.query}"]`;
     }
 
-    console.log(`${icon}  ${tool.name}${details} done${errSuffix}`);
+    console.log(`  ${icon}  ${tool.name}${details} done${errSuffix}`);
   });
 
   return hooks;
@@ -185,6 +252,7 @@ Subagents have access to these tools:
   - grep_search: Search for a text pattern inside files (like grep -rn). Use this to find function definitions, usages, and bugs.
   - find_files : Find files by name pattern in a directory
   - git        : Run git commands (status, diff, add, commit, log, branch, checkout, etc.)
+  - plan_maker : To create a plan before calling any tool call.
 
 Guidelines for Spawning Subagents:
 1. Divide complex or multi-step tasks into clear, individual sub-tasks.
@@ -231,7 +299,10 @@ export const agentCommand = new Command('agent')
         )! as FunctionDeclaration[];
 
         const coordinatorTools = tools.filter(
-          (t) => t.name === 'create_a_subagent' || t.name === 'read_file',
+          (t) =>
+            t.name === 'create_a_subagent' ||
+            t.name === 'read_file' ||
+            t.name === 'plan_maker',
         );
         const chat = session.client.chats.create({
           model: session.model!,
@@ -243,18 +314,39 @@ export const agentCommand = new Command('agent')
 
         let response = await chat.sendMessage({ message: query });
 
+        const toolResults: Part[] = [];
         while (response.functionCalls && response.functionCalls.length > 0) {
-          const toolResults: Part[] = [];
-          for (const fc of response.functionCalls) {
+          const queue = [...response.functionCalls];
+
+          async function runWorker(): Promise<void> {
+            const tool = queue.shift();
+            if (!tool) return;
+
             const result = await dispatchTool(
-              fc.name!,
-              fc.args as Record<string, unknown>,
+              tool.name!,
+              tool.args as Record<string, unknown>,
               hooks,
             );
-            toolResults.push({
-              functionResponse: { name: fc.name!, response: { result } },
-            });
+
+            // If plan_maker ran, the scheduler already executed all steps.
+            // Its results are a Part[] — spread them directly into toolResults.
+            if (tool.name === 'plan_maker') {
+              const scheduledResults: Part[] = JSON.parse(result);
+              toolResults.push(...scheduledResults);
+            } else {
+              toolResults.push({
+                functionResponse: { name: tool.name!, response: { result } },
+              });
+            }
+
+            return runWorker();
           }
+
+          const poolSize = Math.min(queue.length, 5);
+          await Promise.all(
+            Array.from({ length: poolSize }, () => runWorker()),
+          );
+
           response = await chat.sendMessage({ message: toolResults });
         }
 
