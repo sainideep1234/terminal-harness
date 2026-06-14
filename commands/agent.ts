@@ -13,6 +13,9 @@ import {
   bashTool,
   writeFileTool,
   readFileTool,
+  grepSearchTool,
+  findFilesTool,
+  gitTool,
 } from '../utils/toolsDefinition';
 import {
   createHooks,
@@ -44,7 +47,7 @@ async function askPermission(
 
   const banner =
     `\n${line}\n` +
-    `  🔒  Calling  ${toolName}\n` +
+    `  Calling  ${toolName}\n` +
     `  │  path: ${cwd}\n` +
     `${argLines}\n` +
     `${line}`;
@@ -56,6 +59,9 @@ async function askPermission(
     });
   });
 }
+
+
+
 
 // Tool dispatcher — hooks fire around every execution
 export async function dispatchTool(
@@ -83,10 +89,22 @@ export async function dispatchTool(
       args.fileName as string,
       args.content as string,
     );
-  } else if (name === 'read_write') {
+  } else if (name === 'read_file') {
     result = await readFileTool(args.fileName as string);
+  } else if (name === 'grep_search') {
+    result = await grepSearchTool(
+      args.pattern as string,
+      args.directory as string,
+      args.fileGlob as string | undefined,
+    );
+  } else if (name === 'find_files') {
+    result = await findFilesTool(
+      args.directory as string,
+      args.namePattern as string,
+    );
+  } else if (name === 'git') {
+    result = await gitTool(args.gitCommand as string, args.repoPath as string);
   } else if (name === 'create_a_subagent') {
-    const session = await getCurrentSession();
     result = await intializeSubAgents(
       args.provider as PROVIDERS_TYPES,
       args.query as string,
@@ -108,11 +126,11 @@ export async function dispatchTool(
 function buildHooks(): Hooks {
   const hooks = createHooks();
 
-  // Pre-hook: ask user permission before any zsh command
+  // Pre-hook: ask user permission before any zsh command 
   addPreHook(hooks, async ({ tool }) => {
     if (tool.name === 'zsh') {
       let allowed = true;
-      if ((tool.args.comand as string).includes('rm -rf')) {
+      if ((tool.args.comand as string).includes('rm')) {
         allowed = await askPermission(tool.name, tool.args);
       }
       return allowed ? 'allow' : 'deny';
@@ -122,9 +140,29 @@ function buildHooks(): Hooks {
 
   // Post-hook: log every tool result
   addPostHook(hooks, ({ tool, result }) => {
-    const ok = (result as { success?: boolean })?.success !== false;
+    const res = result as { success?: boolean; errorMessage?: string };
+    const ok = res?.success !== false;
     const icon = ok ? '✅' : '❌';
-    console.log(`  ${icon}  ${tool.name} done`);
+    const errSuffix = !ok && res?.errorMessage ? ` - Error: ${res.errorMessage}` : '';
+
+    let details = '';
+    if (tool.name === 'zsh') {
+      details = ` [command: "${tool.args.comand}"]`;
+    } else if (tool.name === 'file_write') {
+      details = ` [file: ${tool.args.fileName}]`;
+    } else if (tool.name === 'read_file') {
+      details = ` [file: ${tool.args.fileName}]`;
+    } else if (tool.name === 'grep_search') {
+      details = ` [pattern: "${tool.args.pattern}" in ${tool.args.directory}]`;
+    } else if (tool.name === 'find_files') {
+      details = ` [pattern: "${tool.args.namePattern}" in ${tool.args.directory}]`;
+    } else if (tool.name === 'git') {
+      details = ` [git ${tool.args.gitCommand}]`;
+    } else if (tool.name === 'create_a_subagent') {
+      details = ` [query: "${tool.args.query}"]`;
+    }
+
+    console.log(`${icon}  ${tool.name}${details} done${errSuffix}`);
   });
 
   return hooks;
@@ -132,23 +170,28 @@ function buildHooks(): Hooks {
 
 // System prompt
 const SYSTEM_PROMPT = `
-You are a powerful coding agent with access to the following tools:
+You are the Lead Coordinator Agent. 
+Your role is to understand the user's request, plan the execution steps, and delegate all file writing, modifying, and command execution tasks to specialized subagents.
 
-  • zsh        :-  Run any shell command (zsh) on the user's machine.
-  • file_write :-  Write (or overwrite) any file at an absolute path.
-  • read_write :-  Read the full contents of any file at an absolute path.
+MANDATORY RULES:
+- You must delegate all actual work (writing files, running shell commands, installing packages) to one or more specialized subagents using the 'create_a_subagent' tool.
+- You only have direct access to 'read_file' (to read project files for context) and 'create_a_subagent' (to delegate tasks).
+- Do NOT attempt to perform file writes or command executions yourself.
 
-Capabilities you can exercise:
-  - Navigate the file system (ls, find, cat via zsh)
-  - Read source files before editing them
-  - Write or patch any file the user asks you to change
-  - Install packages, run tests, start servers — anything via zsh
+Subagents have access to these tools:
+  - zsh        : Run any shell command
+  - file_write : Write files to disk
+  - read_file  : Read files from disk
+  - grep_search: Search for a text pattern inside files (like grep -rn). Use this to find function definitions, usages, and bugs.
+  - find_files : Find files by name pattern in a directory
+  - git        : Run git commands (status, diff, add, commit, log, branch, checkout, etc.)
 
-Guidelines:
-  - Always read a file before modifying it so you preserve existing content.
-  - Prefer minimal, targeted edits — do not rewrite files unnecessarily.
-  - If a shell command might be destructive, briefly explain what it does.
-  - Respond concisely; show relevant code or output, not raw JSON.
+Guidelines for Spawning Subagents:
+1. Divide complex or multi-step tasks into clear, individual sub-tasks.
+2. For each sub-task, spawn a subagent using 'create_a_subagent' and provide a descriptive query and system instructions.
+3. You can spawn multiple subagents sequentially to complete tasks step-by-step.
+4. Instruct subagents to use 'grep_search' or 'find_files' before writing code so they understand the codebase context.
+5. Instruct subagents to use 'git' to commit changes after completing their tasks.
 `.trim();
 
 // Agent command
@@ -156,169 +199,192 @@ export const agentCommand = new Command('agent')
   .description('Runs the agent')
   .option('-p, --prompt <prompt>', 'prompt', '')
   .action(async (options) => {
-    if (!options.prompt) return;
-
-    const query: string = options.prompt;
-    const hooks = buildHooks();
-
-    // Pretty-print the parsed prompt
-    console.log(
-      `\n${'─'.repeat(60)}\n` +
-        `  🤖  Agent Prompt\n` +
-        `${'─'.repeat(60)}\n` +
-        `  ${query}\n` +
-        `${'─'.repeat(60)}\n`,
-    );
-
-    let session;
     try {
-      session = await getCurrentSession();
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error(error.message);
-      } else {
-        console.error(String(error));
-      }
-      process.exit(1);
-    }
+      if (!options.prompt) return;
 
-    // Google (Gemini)
-    if (
-      session.provider === 'google' &&
-      session.apiKey &&
-      session.client instanceof GoogleGenAI
-    ) {
-      const tools = getAllToolsOfProviders('google')! as FunctionDeclaration[];
-      const chat = session.client.chats.create({
-        model: session.model!,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          tools: [{ functionDeclarations: tools }],
-        },
-      });
+      const query: string = options.prompt;
+      const hooks = buildHooks();
 
-      let response = await chat.sendMessage({ message: query });
+      // Pretty-print the parsed prompt
+      console.log(`[QUERY_ASKED]>>>>>>>>>>>>>> ${query}\n`);
 
-      while (response.functionCalls && response.functionCalls.length > 0) {
-        const toolResults: Part[] = [];
-        for (const fc of response.functionCalls) {
-          const result = await dispatchTool(
-            fc.name!,
-            fc.args as Record<string, unknown>,
-            hooks,
-          );
-          toolResults.push({
-            functionResponse: { name: fc.name!, response: { result } },
-          });
+      let session;
+      try {
+        session = await getCurrentSession();
+      } catch (error) {
+        if (error instanceof Error && !session) {
+          console.error(error.message);
+        } else {
+          console.error(String(error));
         }
-        response = await chat.sendMessage({ message: toolResults });
+        process.exit(1);
       }
 
-      console.log(response.text);
+      // Google (Gemini) —
+      if (
+        session.provider === 'google' &&
+        session.apiKey &&
+        session.client instanceof GoogleGenAI
+      ) {
+        const tools = getAllToolsOfProviders(
+          'google',
+        )! as FunctionDeclaration[];
 
-      //  OpenAI
-    } else if (
-      session.provider === 'openai' &&
-      session.apiKey &&
-      session.client instanceof OpenAI
-    ) {
-      const tools = getAllToolsOfProviders(
-        'openai',
-      )! as unknown as OpenAI.Chat.ChatCompletionTool[];
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: query },
-      ];
-
-      let response = await session.client.chat.completions.create({
-        model: session.model,
-        messages,
-        tools,
-      });
-
-      while (response.choices[0].finish_reason === 'tool_calls') {
-        const assistantMsg = response.choices[0].message;
-        messages.push(assistantMsg);
-
-        for (const toolCall of assistantMsg.tool_calls!) {
-          if (toolCall.type !== 'function') continue;
-
-          const args = JSON.parse(toolCall.function.arguments) as Record<
-            string,
-            unknown
-          >;
-          const result = await dispatchTool(
-            toolCall.function.name,
-            args,
-            hooks,
-          );
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: result,
-          });
-        }
-
-        response = await session.client.chat.completions.create({
-          model: session.model,
-          messages,
-          tools,
+        const coordinatorTools = tools.filter(
+          (t) => t.name === 'create_a_subagent' || t.name === 'read_file',
+        );
+        const chat = session.client.chats.create({
+          model: session.model!,
+          config: {
+            systemInstruction: SYSTEM_PROMPT,
+            tools: [{ functionDeclarations: coordinatorTools }],
+          },
         });
-      }
 
-      console.log(response.choices[0].message.content);
-    } else if (
-      session.provider === 'claude' &&
-      session.apiKey &&
-      session.client instanceof Anthropic
-    ) {
-      const tools = getAllToolsOfProviders(
-        'claude',
-      )! as unknown as Anthropic.Tool[];
-      const messages: Anthropic.MessageParam[] = [
-        { role: 'user', content: query },
-      ];
+        let response = await chat.sendMessage({ message: query });
 
-      let response = await session.client.messages.create({
-        model: session.model,
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages,
-        tools,
-      });
-
-      while (response.stop_reason === 'tool_use') {
-        messages.push({ role: 'assistant', content: response.content });
-
-        const toolResults: Anthropic.ToolResultBlockParam[] = [];
-        for (const block of response.content) {
-          if (block.type === 'tool_use') {
+        while (response.functionCalls && response.functionCalls.length > 0) {
+          const toolResults: Part[] = [];
+          for (const fc of response.functionCalls) {
             const result = await dispatchTool(
-              block.name,
-              block.input as Record<string, unknown>,
+              fc.name!,
+              fc.args as Record<string, unknown>,
               hooks,
             );
             toolResults.push({
-              type: 'tool_result',
-              tool_use_id: block.id,
+              functionResponse: { name: fc.name!, response: { result } },
+            });
+          }
+          response = await chat.sendMessage({ message: toolResults });
+        }
+
+        // Stream the final text response token by token
+        process.stdout.write('\n ');
+        const stream = await chat.sendMessageStream({
+          message: '(summarize what you did)',
+        });
+        for await (const chunk of stream) {
+          process.stdout.write(chunk.text ?? '');
+        }
+        process.stdout.write('\n');
+
+        //  OpenAI
+      } else if (
+        session.provider === 'openai' &&
+        session.apiKey &&
+        session.client instanceof OpenAI
+      ) {
+        console.log('enter in openai loop');
+
+        const tools = getAllToolsOfProviders(
+          'openai',
+        )! as unknown as OpenAI.Chat.ChatCompletionTool[];
+        const coordinatorTools = tools.filter(
+          (t) =>
+            t.type === 'function' &&
+            (t.function.name === 'create_a_subagent' ||
+              t.function.name === 'read_file'),
+        );
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: query },
+        ];
+
+        let response = await session.client.chat.completions.create({
+          model: session.model,
+          messages,
+          tools: coordinatorTools,
+        });
+
+        while (response.choices[0].finish_reason === 'tool_calls') {
+          const assistantMsg = response.choices[0].message;
+          messages.push(assistantMsg);
+
+          for (const toolCall of assistantMsg.tool_calls!) {
+            if (toolCall.type !== 'function') continue;
+
+            const args = JSON.parse(toolCall.function.arguments) as Record<
+              string,
+              unknown
+            >;
+            const result = await dispatchTool(
+              toolCall.function.name,
+              args,
+              hooks,
+            );
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
               content: result,
             });
           }
-        }
-        messages.push({ role: 'user', content: toolResults });
 
-        response = await session.client.messages.create({
+          response = await session.client.chat.completions.create({
+            model: session.model,
+            messages,
+            tools: coordinatorTools,
+          });
+        }
+
+        console.log(response.choices[0].message.content);
+      } else if (
+        session.provider === 'claude' &&
+        session.apiKey &&
+        session.client instanceof Anthropic
+      ) {
+        const tools = getAllToolsOfProviders(
+          'claude',
+        )! as unknown as Anthropic.Tool[];
+        const coordinatorTools = tools.filter(
+          (t) => t.name === 'create_a_subagent' || t.name === 'read_file',
+        );
+        const messages: Anthropic.MessageParam[] = [
+          { role: 'user', content: query },
+        ];
+
+        let response = await session.client.messages.create({
           model: session.model,
           max_tokens: 4096,
           system: SYSTEM_PROMPT,
           messages,
-          tools,
+          tools: coordinatorTools,
         });
-      }
 
-      const textBlock = response.content.find((b) => b.type === 'text');
-      if (textBlock && textBlock.type === 'text') {
-        console.log(textBlock.text);
+        while (response.stop_reason === 'tool_use') {
+          messages.push({ role: 'assistant', content: response.content });
+
+          const toolResults: Anthropic.ToolResultBlockParam[] = [];
+          for (const block of response.content) {
+            if (block.type === 'tool_use') {
+              const result = await dispatchTool(
+                block.name,
+                block.input as Record<string, unknown>,
+                hooks,
+              );
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: result,
+              });
+            }
+          }
+          messages.push({ role: 'user', content: toolResults });
+
+          response = await session.client.messages.create({
+            model: session.model,
+            max_tokens: 4096,
+            system: SYSTEM_PROMPT,
+            messages,
+            tools: coordinatorTools,
+          });
+        }
+
+        const textBlock = response.content.find((b) => b.type === 'text');
+        if (textBlock && textBlock.type === 'text') {
+          console.log(textBlock.text);
+        }
       }
+    } catch (e) {
+      console.error(e);
     }
   });

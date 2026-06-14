@@ -14,29 +14,40 @@ export async function intializeSubAgents(
   hooks: Hooks,
 ): Promise<toolReturnType> {
   const session = await getCurrentSession();
-  if (provider === 'google' && session.client instanceof GoogleGenAI) {
+  
+  let normalizedProvider = (provider || '').toLowerCase().trim();
+  if (normalizedProvider === 'gemini') {
+    normalizedProvider = 'google';
+  }
+  if (normalizedProvider !== session.provider) {
+    normalizedProvider = session.provider;
+  }
+
+  if (normalizedProvider === 'google' && session.client instanceof GoogleGenAI) {
     const tools = getAllToolsOfProviders('google') as FunctionDeclaration[];
 
     const chat = session.client.chats.create({
-      model: 'gemini-3.5-flash',
+      model: session.model!,
       config: {
         systemInstruction: systemPrompt,
         tools: [{ functionDeclarations: tools }],
       },
     });
-    const toolResponse: any = [];
     let response = await chat.sendMessage({ message: query });
 
     while (response.functionCalls && response.functionCalls.length > 0) {
+      const toolResults: any[] = [];
       for (const fc of response.functionCalls) {
         const result = await dispatchTool(fc.name!, fc.args!, hooks);
-        toolResponse.push({ name: fc.name, response: { result } });
-        response = await chat.sendMessage(toolResponse);
+        toolResults.push({
+          functionResponse: { name: fc.name!, response: { result } },
+        });
       }
+      response = await chat.sendMessage({ message: toolResults });
     }
 
     return { success: true, data: response.text };
-  } else if (provider === 'claude' && session.client instanceof Anthropic) {
+  } else if (normalizedProvider === 'claude' && session.client instanceof Anthropic) {
     const messages: Anthropic.MessageParam[] = [
       { role: 'user', content: query },
     ];
@@ -83,7 +94,7 @@ export async function intializeSubAgents(
       return { success: true, data: textBlock.text };
     }
   } else if (
-    provider === 'openai' &&
+    normalizedProvider === 'openai' &&
     session.apiKey &&
     session.client instanceof OpenAI
   ) {

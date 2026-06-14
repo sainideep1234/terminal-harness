@@ -51,7 +51,7 @@ const WriteToFile: Ttool = {
 };
 
 const ReadToFile: Ttool = {
-  name: 'read_write',
+  name: 'read_file',
   descripiton: 'Read the content of a file at a given path',
   options: {
     type: 'object',
@@ -85,7 +85,68 @@ const createSubAgent: Ttool = {
         description: 'agents needs to do',
       },
     },
-    required: ['systemPrompt', 'toolsList'],
+    required: ['systemPrompt' , 'provider' ,'query' ],
+  },
+};
+
+const grepSearch: Ttool = {
+  name: 'grep_search',
+  descripiton: 'Search for a text pattern inside files in a directory (like grep -rn). Returns matching file paths and line numbers.',
+  options: {
+    type: 'object',
+    properties: {
+      pattern: {
+        type: 'string',
+        description: 'The text or regex pattern to search for',
+      },
+      directory: {
+        type: 'string',
+        description: 'The absolute path of the directory to search in',
+      },
+      fileGlob: {
+        type: 'string',
+        description: 'Optional file glob filter (e.g., "*.ts", "*.js"). Leave empty to search all files.',
+      },
+    },
+    required: ['pattern', 'directory'],
+  },
+};
+
+const findFiles: Ttool = {
+  name: 'find_files',
+  descripiton: 'Find files by name pattern inside a directory. Excludes node_modules and .git automatically.',
+  options: {
+    type: 'object',
+    properties: {
+      directory: {
+        type: 'string',
+        description: 'The absolute path of the directory to search in',
+      },
+      namePattern: {
+        type: 'string',
+        description: 'The file name pattern to match (e.g., "*.ts", "package.json")',
+      },
+    },
+    required: ['directory', 'namePattern'],
+  },
+};
+
+const git: Ttool = {
+  name: 'git',
+  descripiton: 'Run a git command in a repository. Supports status, diff, log, add, commit, branch, checkout, etc.',
+  options: {
+    type: 'object',
+    properties: {
+      gitCommand: {
+        type: 'string',
+        description: 'The git subcommand and arguments (e.g., "status", "diff HEAD", "add .", "commit -m \\"fix bug\\"")',
+      },
+      repoPath: {
+        type: 'string',
+        description: 'The absolute path of the git repository to run the command in',
+      },
+    },
+    required: ['gitCommand', 'repoPath'],
   },
 };
 
@@ -94,4 +155,8 @@ export const ALL_TOOLS: Ttool[] = [
   WriteToFile,
   ReadToFile,
   createSubAgent,
+  grepSearch,
+  findFiles,
+  git,
 ];
+
