@@ -196,7 +196,23 @@ const planMaker: Ttool = {
   },
 };
 
+const skillsMaker: Ttool = {
+  name: 'skill_maker',
+  descripiton: 'make skills what is the best practices to do .',
+  options: {
+    type: 'object',
+    properties: {
+      skills: {
+        type: 'string',
+        descripton: 'skill that need all the information and good practice',
+      },
+    },
+    required: [],
+  },
+};
+
 export const ALL_TOOLS: Ttool[] = [
+  skillsMaker,
   zshCommands,
   WriteToFile,
   ReadToFile,

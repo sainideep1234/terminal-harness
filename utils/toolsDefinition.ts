@@ -1,14 +1,19 @@
+import { file } from 'bun';
 import { exec } from 'child_process';
 import fs from 'fs/promises';
+import path from 'path';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+
+
+const lock = new Map<string, Promise<void>>();
 
 export type toolReturnType =
   | { success: true; data: unknown }
   | { success: false; errorMessage: string };
 
-// Run any shell command and await its output
+
 export async function bashTool(command: string): Promise<toolReturnType> {
   try {
     const { stdout, stderr } = await execAsync(command, { timeout: 30000 });
@@ -22,20 +27,29 @@ export async function bashTool(command: string): Promise<toolReturnType> {
   }
 }
 
-// Write raw content to a file
 export async function writeFileTool(
   filePath: string,
   content: string,
 ): Promise<toolReturnType> {
   try {
-    await fs.writeFile(filePath, content);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+
+      const existing = lock.get(filePath) ?? Promise.resolve();
+
+      const myTurn = existing.then(() => fs.writeFile(filePath, content));
+    lock.set(filePath, myTurn);
+
+    await myTurn;
+    if (lock.get(filePath) === myTurn) {
+      lock.delete(filePath);
+    }
+
     return { success: true, data: `File written: ${filePath}` };
   } catch (error) {
     return { success: false, errorMessage: "can't able to write data" };
   }
 }
 
-// Read raw content from a file
 export async function readFileTool(filePath: string): Promise<toolReturnType> {
   try {
     const data = await fs.readFile(filePath, 'utf-8');
@@ -45,7 +59,6 @@ export async function readFileTool(filePath: string): Promise<toolReturnType> {
   }
 }
 
-// Search for a text pattern inside files (like grep -rn)
 export async function grepSearchTool(
   pattern: string,
   directory: string,
@@ -60,7 +73,6 @@ export async function grepSearchTool(
       data: stdout || `No matches found for "${pattern}" in ${directory}`,
     };
   } catch (error: any) {
-    // grep returns exit code 1 when no matches — not a real error
     return {
       success: true,
       data: `No matches found for "${pattern}" in ${directory}`,
@@ -68,7 +80,6 @@ export async function grepSearchTool(
   }
 }
 
-// Find files matching a name pattern in a directory (like find)
 export async function findFilesTool(
   directory: string,
   namePattern: string,
@@ -90,7 +101,6 @@ export async function findFilesTool(
   }
 }
 
-// Run a git command (status, diff, log, add, commit, etc.)
 export async function gitTool(
   gitCommand: string,
   repoPath: string,
@@ -118,4 +128,3 @@ export interface WorkFlowStep {
   toolName: string;
   args: Record<string, unknown>;
 }
-
