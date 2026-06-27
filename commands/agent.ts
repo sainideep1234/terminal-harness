@@ -375,14 +375,10 @@ export const agentCommand = new Command('agent')
           response = await chat.sendMessage({ message: toolResults });
         }
 
-        process.stdout.write('\n ');
-        const stream = await chat.sendMessageStream({
+        const summaryResponse = await chat.sendMessage({
           message: '(summarize what you did)',
         });
-        for await (const chunk of stream) {
-          process.stdout.write(chunk.text ?? '');
-        }
-        process.stdout.write('\n');
+        console.log(`\n${summaryResponse.text ?? ''}`);
 
         //  OpenAI
       } else if (
